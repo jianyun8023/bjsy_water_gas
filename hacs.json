@@ -1,0 +1,5 @@
+{
+    "name": "北京顺义自来水天然气信息查询",
+    "domains": ["sensor"],
+    "render_readme": true
+}
