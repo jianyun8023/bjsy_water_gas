@@ -10,17 +10,11 @@
     },
     "step": {
       "user": {
-        "title": "Add OpenId",
-        "description": "Add OpenId",
+        "title": "添加水、气信息",
+        "description": "添加水、气信息",
         "data": {
-          "openid": "Openid"
-        }
-      },
-      "account": {
-        "title": "Select consNo",
-        "description": "Select consNo",
-        "data": {
-          "consNo": "consNo"
+          "cuOpenId": "cuOpenId",
+          "customerCode": "户号"
         }
       }
     }

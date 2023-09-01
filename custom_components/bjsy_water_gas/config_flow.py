@@ -9,15 +9,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.selector import selector
 from requests import RequestException
 
 from .const import DOMAIN, LOGGER
-from .sgcc import SGCCData, InvalidData
+from .szjf import SZJFData, InvalidData
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required("openid"): str,
+        vol.Required("customerCode"): str,
+        vol.Required("cuOpenId"): str,
     }
 )
 
@@ -26,14 +26,16 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     """Validate the user input allows us to connect.
     """
     session = async_get_clientsession(hass)
-    openid = data["openid"]
-    api: SGCCData
-    if openid:
-        api = SGCCData(session, openid)
+    cuOpenId = data["cuOpenId"]
+    customerCode = data["customerCode"]
+    api: SZJFData
+    if cuOpenId and customerCode:
+
         try:
-            await api.async_get_token()
-            cons_nos = await api.async_get_cons_nos()
-            return {"cons_nos": cons_nos, "openid": data["openid"]}
+            api = SZJFData(session, cuOpenId, customerCode)
+            await api.async_auth_check()
+            await api.async_get_detail(1)
+            return data
         except InvalidData as exc:
             LOGGER.error(exc)
             raise InvalidAuth
@@ -44,7 +46,6 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-
     VERSION = 1
     data = None
 
@@ -64,31 +65,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
-                self.data = info
-                return await self.async_step_account(user_input=None)
+                return self.async_create_entry(title="用户号：" + info["customerCode"], data=info)
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
-        )
-
-    async def async_step_account(
-            self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            self.data["consNo"] = user_input["consNo"]
-            return self.async_create_entry(title="用户号：" + user_input["consNo"], data=self.data)
-
-        options = []
-        for cons_no, cons_name in self.data["cons_nos"].items():
-            options.append({"value": cons_no, "label": f'{cons_name}({cons_no})'})
-
-        data_schema = {vol.Required("consNo"): str, "consNo": selector({
-            "select": {
-                "options": options,
-            }
-        })}
-        return self.async_show_form(
-            step_id="account", data_schema=vol.Schema(data_schema), errors=errors
         )
 
 

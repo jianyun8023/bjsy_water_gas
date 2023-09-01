@@ -3,7 +3,8 @@
       "step": {
         "user": {
           "data": {
-            "openid": "[%key:common::config_flow::data::openid%]"
+            "cuOpenId": "[%key:common::config_flow::data::cuOpenId%]",
+            "customerCode": "[%key:common::config_flow::data::customerCode%]"
           }
         }
       },

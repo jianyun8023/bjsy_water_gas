@@ -2,15 +2,15 @@ from homeassistant.components.sensor import (
     SensorDeviceClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfEnergy, STATE_UNKNOWN
+from homeassistant.const import UnitOfEnergy, STATE_UNKNOWN, UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 
 from .const import DOMAIN, UPDATE_INTERVAL, LOGGER
-from .sgcc import GJDWCorrdinator
+from .szjf import SZJFCorrdinator
 
-SGCC_SENSORS = {
+SZJF_SENSORS = {
     "balance": {
         "name": "电费余额",
         "icon": "hass:cash-100",
@@ -55,10 +55,10 @@ async def async_setup_entry(
     sensors = []
     config = hass.data[DOMAIN][config_entry.entry_id]
 
-    openid = config.get("openid")
-    consNo = config.get("consNo")
+    cuOpenId = config.get("cuOpenId")
+    customerCode = config.get("customerCode")
 
-    api = GJDWCorrdinator(hass, openid, consNo)
+    api = SZJFCorrdinator(hass, cuOpenId, customerCode)
     hass.data[DOMAIN]["instance"] = api
 
     coordinator = DataUpdateCoordinator(
@@ -71,16 +71,14 @@ async def async_setup_entry(
     LOGGER.info("async_setup_entry: " + str(coordinator))
     await coordinator.async_refresh()
     data = coordinator.data
-    sgcc_sensors_keys = SGCC_SENSORS.keys()
-    for cons_no, values in data.items():
+    sgcc_sensors_keys = SZJF_SENSORS.keys()
+    for meterCode, values in data.items():
         for key in sgcc_sensors_keys:
             if key in values.keys():
-                sensors.append(SGCCSensor(coordinator, cons_no, key))
+                sensors.append(SGCCSensor(coordinator, meterCode, key))
 
         for month in range(12):
-            sensors.append(SGCCHistorySensor(coordinator, cons_no, month))
-        for day in range(30):
-            sensors.append(SGCCDailyBillSensor(coordinator, cons_no, day))
+            sensors.append(SGCCHistorySensor(coordinator, meterCode, month))
     async_add_entities(sensors, False)
     return None
 
@@ -100,21 +98,22 @@ class SGCCBaseSensor(CoordinatorEntity):
 
 
 class SGCCSensor(SGCCBaseSensor):
-    def __init__(self, coordinator, cons_no, sensor_key):
+    def __init__(self, coordinator, meter_code, meter_type, sensor_key):
         super().__init__(coordinator)
-        self._cons_no = cons_no
+        self._meter_code = meter_code
+        self._meter_type = meter_type
         self._sensor_key = sensor_key
-        self._config = SGCC_SENSORS[self._sensor_key]
+        self._config = SZJF_SENSORS[self._sensor_key]
         self._attributes = self._config.get("attributes")
         self._coordinator = coordinator
-        self._unique_id = f"{DOMAIN}.{cons_no}_{sensor_key}"
+        self._unique_id = f"{DOMAIN}.{meter_code}_{meter_type}_{sensor_key}"
         self.entity_id = self._unique_id
 
     def get_value(self, attribute=None):
         try:
             if attribute is None:
-                return self._coordinator.data.get(self._cons_no).get(self._sensor_key)
-            return self._coordinator.data.get(self._cons_no).get(attribute)
+                return self._coordinator.data.get(self._meter_code).get(self._sensor_key)
+            return self._coordinator.data.get(self._meter_code).get(attribute)
         except KeyError:
             return STATE_UNKNOWN
 
@@ -151,19 +150,20 @@ class SGCCSensor(SGCCBaseSensor):
 
 
 class SGCCHistorySensor(SGCCBaseSensor):
-    def __init__(self, coordinator, cons_no, index):
+    def __init__(self, coordinator, meter_code, meter_type, index):
         super().__init__(coordinator)
-        self._cons_no = cons_no
+        self._meter_code = meter_code
+        self._meter_type = meter_type
         self._coordinator = coordinator
         self._index = index
-        self._unique_id = f"{DOMAIN}.{cons_no}_history_{index + 1}"
+        self._unique_id = f"{DOMAIN}.{meter_code}_{meter_type}_history_{index + 1}"
         self.entity_id = self._unique_id
 
     @property
     def name(self):
         try:
             return (
-                self._coordinator.data.get(self._cons_no)
+                self._coordinator.data.get(self._meter_code)
                 .get("history")[self._index]
                 .get("name")
             )
@@ -174,7 +174,7 @@ class SGCCHistorySensor(SGCCBaseSensor):
     def state(self):
         try:
             return (
-                self._coordinator.data.get(self._cons_no)
+                self._coordinator.data.get(self._meter_code)
                 .get("history")[self._index]
                 .get("consume")
             )
@@ -185,7 +185,7 @@ class SGCCHistorySensor(SGCCBaseSensor):
     def extra_state_attributes(self):
         try:
             return {
-                "consume_bill": self._coordinator.data.get(self._cons_no)
+                "consume_bill": self._coordinator.data.get(self._meter_code)
                 .get("history")[self._index]
                 .get("consume_bill")
             }
@@ -194,71 +194,12 @@ class SGCCHistorySensor(SGCCBaseSensor):
 
     @property
     def device_class(self):
-        return SensorDeviceClass.ENERGY
+        if "1" == self._meter_type:
+            return SensorDeviceClass.WATER
+        if "2" == self._meter_type:
+            return SensorDeviceClass.GAS
+        return SensorDeviceClass.WATER
 
     @property
     def unit_of_measurement(self):
-        return UnitOfEnergy.KILO_WATT_HOUR
-
-
-class SGCCDailyBillSensor(SGCCBaseSensor):
-    def __init__(self, coordinator, cons_no, index):
-        super().__init__(coordinator)
-        self._cons_no = cons_no
-        self._coordinator = coordinator
-        self._index = index
-        self._unique_id = f"{DOMAIN}.{cons_no}_daily_{index + 1}"
-        self.entity_id = self._unique_id
-
-    @property
-    def name(self):
-        try:
-            return (
-                self._coordinator.data.get(self._cons_no)
-                .get("daily_bills")[self._index]
-                .get("bill_date")
-            )
-        except KeyError:
-            return STATE_UNKNOWN
-
-    @property
-    def state(self):
-        try:
-            return (
-                self._coordinator.data.get(self._cons_no)
-                .get("daily_bills")[self._index]
-                .get("day_consume")
-            )
-        except KeyError:
-            return STATE_UNKNOWN
-
-    @property
-    def extra_state_attributes(self):
-        try:
-            return {
-                "bill_time": self._coordinator.data.get(self._cons_no)
-                .get("daily_bills")[self._index]
-                .get("bill_time"),
-                "day_consume1": self._coordinator.data.get(self._cons_no)
-                .get("daily_bills")[self._index]
-                .get("day_consume1"),
-                "day_consume2": self._coordinator.data.get(self._cons_no)
-                .get("daily_bills")[self._index]
-                .get("day_consume2"),
-                "day_consume3": self._coordinator.data.get(self._cons_no)
-                .get("daily_bills")[self._index]
-                .get("day_consume3"),
-                "day_consume4": self._coordinator.data.get(self._cons_no)
-                .get("daily_bills")[self._index]
-                .get("day_consume4"),
-            }
-        except KeyError:
-            return None
-
-    @property
-    def device_class(self):
-        return SensorDeviceClass.ENERGY
-
-    @property
-    def unit_of_measurement(self):
-        return UnitOfEnergy.KILO_WATT_HOUR
+        return UnitOfVolumeFlowRate.CUBIC_METERS_PER_HOUR

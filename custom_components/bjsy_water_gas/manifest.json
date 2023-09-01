@@ -7,6 +7,6 @@
   "iot_class": "cloud_polling",
   "config_flow": true,
   "dependencies": [],
-  "requirements": [],
+  "requirements": ["beautifulsoup4"],
   "codeowners": ["@jianyun8023"]
 }
