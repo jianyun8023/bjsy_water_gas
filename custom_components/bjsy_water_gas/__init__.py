@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """The 北京顺义自来水天然气信息查询 integration."""
 from __future__ import annotations
 

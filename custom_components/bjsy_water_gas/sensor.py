@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from homeassistant.components.sensor import (
     SensorDeviceClass,
 )
@@ -10,40 +11,74 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpda
 from .const import DOMAIN, UPDATE_INTERVAL, LOGGER
 from .szjf import SZJFCorrdinator
 
-SZJF_SENSORS = {
+SZJF_WATER_SENSORS = {
     "balance": {
-        "name": "电费余额",
+        "name": "自来水余额",
         "icon": "hass:cash-100",
         "unit_of_measurement": "元",
         "attributes": ["last_update"],
     },
-    "current_level": {"name": "当前用电阶梯", "icon": "hass:stairs"},
+    "current_level": {"name": "当前自来水阶梯", "icon": "hass:stairs"},
     "current_price": {
-        "name": "当前电价",
+        "name": "当前水价",
         "icon": "hass:cash-100",
-        "unit_of_measurement": "CNY/kWh",
+        "unit_of_measurement": "CNY/m³",
     },
     "current_level_consume": {
-        "name": "当前阶梯用电",
-        "device_class": SensorDeviceClass.ENERGY,
-        "unit_of_measurement": UnitOfEnergy.KILO_WATT_HOUR,
+        "name": "当前自来水阶梯",
+        "device_class": SensorDeviceClass.WATER,
+        "unit_of_measurement": UnitOfVolumeFlowRate.CUBIC_METERS_PER_HOUR,
     },
     "current_level_remain": {
         "name": "当前阶梯剩余额度",
-        "device_class": SensorDeviceClass.ENERGY,
-        "unit_of_measurement": UnitOfEnergy.KILO_WATT_HOUR,
+        "device_class": SensorDeviceClass.WATER,
+        "unit_of_measurement": UnitOfVolumeFlowRate.CUBIC_METERS_PER_HOUR,
     },
     "year_consume": {
-        "name": "本年度用电量",
-        "device_class": SensorDeviceClass.ENERGY,
-        "unit_of_measurement": UnitOfEnergy.KILO_WATT_HOUR,
+        "name": "本年度自来水用量",
+        "device_class": SensorDeviceClass.WATER,
+        "unit_of_measurement": UnitOfVolumeFlowRate.CUBIC_METERS_PER_HOUR,
     },
     "year_consume_bill": {
-        "name": "本年度电费",
+        "name": "本年度自来水费用",
         "icon": "hass:cash-100",
         "unit_of_measurement": "元",
     },
-    "current_pgv_type": {"name": "当前电价类别", "icon": "hass:cash-100"},
+}
+
+SZJF_GAS_SENSORS = {
+    "balance": {
+        "name": "天然气余额",
+        "icon": "hass:cash-100",
+        "unit_of_measurement": "元",
+        "attributes": ["last_update"],
+    },
+    "current_level": {"name": "当前用水阶梯", "icon": "hass:stairs"},
+    "current_price": {
+        "name": "当前天然气价格",
+        "icon": "hass:cash-100",
+        "unit_of_measurement": "CNY/m³",
+    },
+    "current_level_consume": {
+        "name": "当前阶梯天然气用量",
+        "device_class": SensorDeviceClass.GAS,
+        "unit_of_measurement": UnitOfVolumeFlowRate.CUBIC_METERS_PER_HOUR,
+    },
+    "current_level_remain": {
+        "name": "当前阶梯剩余额度",
+        "device_class": SensorDeviceClass.GAS,
+        "unit_of_measurement": UnitOfVolumeFlowRate.CUBIC_METERS_PER_HOUR,
+    },
+    "year_consume": {
+        "name": "本年度天然气用量",
+        "device_class": SensorDeviceClass.GAS,
+        "unit_of_measurement": UnitOfVolumeFlowRate.CUBIC_METERS_PER_HOUR,
+    },
+    "year_consume_bill": {
+        "name": "本年度天然气费用",
+        "icon": "hass:cash-100",
+        "unit_of_measurement": "元",
+    },
 }
 
 
@@ -71,14 +106,15 @@ async def async_setup_entry(
     LOGGER.info("async_setup_entry: " + str(coordinator))
     await coordinator.async_refresh()
     data = coordinator.data
-    sgcc_sensors_keys = SZJF_SENSORS.keys()
     for meterCode, values in data.items():
+        sgcc_sensors_keys = []
+        sgcc_sensors_keys = SZJF_GAS_SENSORS.keys() if  values["meterUseType"] == "2" else SZJF_WATER_SENSORS.keys()
         for key in sgcc_sensors_keys:
             if key in values.keys():
-                sensors.append(SGCCSensor(coordinator, meterCode, key))
+                sensors.append(SGCCSensor(coordinator, meterCode, values["meterUseType"], key))
 
-        for month in range(12):
-            sensors.append(SGCCHistorySensor(coordinator, meterCode, month))
+        for month in range(len(values["history"])):
+            sensors.append(SGCCHistorySensor(coordinator, meterCode, values["meterUseType"], month))
     async_add_entities(sensors, False)
     return None
 
@@ -103,6 +139,7 @@ class SGCCSensor(SGCCBaseSensor):
         self._meter_code = meter_code
         self._meter_type = meter_type
         self._sensor_key = sensor_key
+        SZJF_SENSORS =  SZJF_GAS_SENSORS if   meter_type == "2" else SZJF_WATER_SENSORS
         self._config = SZJF_SENSORS[self._sensor_key]
         self._attributes = self._config.get("attributes")
         self._coordinator = coordinator
@@ -156,12 +193,13 @@ class SGCCHistorySensor(SGCCBaseSensor):
         self._meter_type = meter_type
         self._coordinator = coordinator
         self._index = index
-        self._unique_id = f"{DOMAIN}.{meter_code}_{meter_type}_history_{index + 1}"
+        self._unique_id = f"{DOMAIN}.{meter_code}_{meter_type}_history_{index}"
         self.entity_id = self._unique_id
 
     @property
     def name(self):
         try:
+            LOGGER.debug(str(self._coordinator.data))
             return (
                 self._coordinator.data.get(self._meter_code)
                 .get("history")[self._index]
@@ -176,7 +214,7 @@ class SGCCHistorySensor(SGCCBaseSensor):
             return (
                 self._coordinator.data.get(self._meter_code)
                 .get("history")[self._index]
-                .get("consume")
+        .get("amount")
             )
         except KeyError:
             return STATE_UNKNOWN
@@ -185,12 +223,12 @@ class SGCCHistorySensor(SGCCBaseSensor):
     def extra_state_attributes(self):
         try:
             return {
-                "consume_bill": self._coordinator.data.get(self._meter_code)
+        "money": self._coordinator.data.get(self._meter_code)
                 .get("history")[self._index]
-                .get("consume_bill")
+        .get("money")
             }
         except KeyError:
-            return {"consume_bill": 0.0}
+            return {"money": 0.0}
 
     @property
     def device_class(self):

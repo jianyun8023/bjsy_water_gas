@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import asyncio
 import re
 
@@ -87,21 +88,20 @@ class SZJFData:
             "cuOpenId": self._cu_openid,
             "state": "00000001",
             "status": "",
-        })
+        },ssl=False)
         if r.status == 200:
             html_text = await r.read()
-            html_text = str(html_text)
+            html_text = str(html_text, 'utf8')
 
             LOGGER.error(r.status)
-            print(html_text)
-            if self._customer_code in html_text and "水表" in html_text:
+            if self._customer_code in html_text:
                 ret = True
             else:
                 ret = False
-                LOGGER.error(f"get_detail error: {html_text}")
+                LOGGER.error("auth_check error")
         else:
             ret = False
-            LOGGER.error(f"get_detail response status_code = {r.status_code}")
+            LOGGER.error(f"auth_check response status_code = {r.status_code}")
         return ret
 
     async def async_get_detail(self, meterUseType):
@@ -112,18 +112,20 @@ class SZJFData:
             "customerCode": self._customer_code,
             "cuOpenId": self._cu_openid,
             "state": "00000001",
-        })
+        },ssl=False)
         if r.status == 200:
 
             html_text = await r.read()
-            html_text = str(html_text)
-            LOGGER.error(r.status)
-            print(html_text)
+            html_text = str(html_text,'utf8')
             if self._customer_code in html_text:
                 ret = True
-                detail = self.parse_html_detail(html_text)
-                for key, v in detail:
-                    self._info[key] = v
+                try:
+                    detail = await self.parse_html_detail(html_text)
+                    for key in detail.keys():
+                        self._info[key] = detail[key]
+                except Exception as ex:
+                    LOGGER.error(ex)
+                    raise ex
             else:
                 ret = False
                 LOGGER.error(f"get_detail error: {html_text}")
@@ -138,58 +140,65 @@ class SZJFData:
             "meterCode": meterCode,
             "meterUseType": meterUseType,
             "customerCode": self._customer_code,
-        })
+        },
+                                    ssl=False)
 
         if r.status == 200:
             html_text = await r.read()
-            html_text = str(html_text)
-            if self._customer_code in html_text:
+            html_text = str(html_text, 'utf8')
+            if meterCode in html_text:
                 ret = True
                 monthly = self.parse_html_monthly(html_text)
-                self._info[meterCode]["history"] = range(len(monthly))
+                self._info[meterCode]["history"] = [{}] * len(monthly)
                 for n in range(len(monthly)):
-                    self._info[meterCode]["history"][n] = monthly[n]
+                    d = monthly[n]
+                    self._info[meterCode]["history"][n] = d
+                    self._info[meterCode]["history"][n]["name"] =d["month"][0] + d["month"][1]
 
             else:
                 ret = False
-                LOGGER.error(f"get_detail error: {html_text}")
+                LOGGER.error("get_monthly_bill fail")
         else:
             ret = False
-            LOGGER.error(f"get_detail response status_code = {r.status_code}")
+            LOGGER.error(f"get_monthly_bill response status_code = {r.status_code}")
         return ret
 
-    def parse_html_detail(self, html_text) -> dict[str, any]:
+    async def parse_html_detail(self, html_text) -> dict[str, any]:
         soup = BeautifulSoup(html_text, 'html.parser')
 
         result = {}
         elements = soup.find_all(id=re.compile(r'^detial_water_1_\d'))
         for element in elements:
-            print("---------------")
             button = element.select_one('button')
             onclick = button['onclick']
-            match = re.search(r"prestoreWaterMoney\('(.*)'\)", onclick)
-            meterCode, meterUseType
+            LOGGER.debug("onclick: " + onclick)
+            match = re.search(r"prestoreWaterMoney\((.*)\)", onclick)
+            meterCode = ""
+            meterUseType = ""
             if match:
-                params = match.group(1).replace("'", "").split(',')
+                params = match.group(1).replace("'", "").replace("\\", "").split(',')
+                LOGGER.debug("params: " + str(params))
                 meterUseType = params[1]
                 meterCode = params[2]
             data = {"meterUseType": meterUseType}
             content = element.select_one('.mui-content')
             texts = content.select('a')
-            for text in texts:
-                print(text)
-                if "当前余额" in str(text):
-                    balance = str(text.select_one('span').text).strip("(元)")
+            for e in texts:
+                str_text = e.text
+                LOGGER.debug("text: " + str_text)
+                content = str(e.select_one('span').text)
+                LOGGER.debug("content: " + content)
+                if "当前余额" in str_text:
+                    balance = content.strip("(元)")
                     data["balance"] = balance
-                if "年累计量" in str(text):
-                    print(str(text.select_one('span').text))
-                    year_consume = str(text.select_one('span').text).strip("(立方米)")
+                if "年累计量" in str_text:
+                    year_consume = content.strip("(立方米)")
                     data["year_consume"] = year_consume
-                if "当前阶梯" in str(text):
-                    print(str(text.select_one('span').text))
-                    current_level = str(text.select_one('span').text)
+                if "当前阶梯" in str_text:
+                    current_level = content
                     data["current_level"] = current_level
             result[meterCode] = data
+        LOGGER.debug("result: " + str(result))
         return result
 
     def parse_html_monthly(self, html_text):
@@ -209,7 +218,7 @@ class SZJFData:
                 money = money_arr[n]
                 data.append({"month": month, "amount": amount, "money": money})
                 LOGGER.debug(f'{month[0]}年{month[1]}月 用量: {amount}  金额: {money}')
-        data.sort(key=lambda x: x['month'].split('-')[1], reverse=True)
+        data.sort(key=lambda x: x['month'][1], reverse=True)
         return data
 
     async def async_get_data(self):
@@ -219,3 +228,4 @@ class SZJFData:
             await self.async_get_monthly_bill(meterCode, self._info[meterCode]["meterUseType"])
         LOGGER.debug(f"Data {self._info}")
         return self._info
+

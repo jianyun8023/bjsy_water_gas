@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Constants for the 北京顺义自来水天然气信息查询 integration."""
 import logging
 from datetime import timedelta
