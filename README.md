@@ -26,3 +26,11 @@ customerCode 是 xxxxxx_xxxXX_X 这样格式的token
 从 `https://ys.shunzhengjinfu.com/cis/wechart/$https://ys.shunzhengjinfu.com/cis/wechart/we-chart!`这样的url上可以获得，这些参数。
 ![PnSRIc](https://raw.githubusercontent.com/jianyun8023/pic/master/uPic/PnSRIc.png)
 
+## 示例卡片
+
+代码参考 [docs/水气费卡片.yaml](docs/水气费卡片.yaml)
+把实体中的编号换成你对应的编号就可以
+
+效果图
+![example1](docs/image/example1.png)
+![example2](docs/image/example2.png)

@@ -1,0 +1,122 @@
+type: custom:tabbed-card
+options: {}
+styles:
+  '--mdc-theme-primary': rgba(238, 63, 77, 0.9)
+  '--mdc-tab-text-label-color-default': rgba(43, 173, 132, 0.9)
+tabs:
+  - card:
+      type: custom:vertical-stack-in-card
+      cards:
+        - type: entities
+          entities:
+            - entity: sensor.state_grid_11000xxxxxxxx8_balance
+              name: 账户余额
+            - entity: sensor.state_grid_11000xxxxxxxx8_year_level
+              name: 用电阶梯
+            - entity: sensor.state_grid_11000xxxxxxxx8_month_ele_num
+              name: 当月累计用电
+            - entity: sensor.state_grid_11000xxxxxxxx8_last_month_ele_num
+              name: 上月用电
+            - entity: sensor.state_grid_11000xxxxxxxx8_last_month_ele_cost
+              name: 上月电费
+            - entity: sensor.state_grid_11000xxxxxxxx8_year_ele_cost
+              name: 年度累计费用
+            - entity: sensor.state_grid_11000xxxxxxxx8_year_ele_num
+              name: 年度累计用电
+          title: 用电
+          css:
+            table+: 'padding-top: 15px;'
+            tbody tr:nth-child(even): 'background-color: #a2542f6;'
+            td.left: 'padding: 10px 10px 10px 10px'
+            th.left: 'padding: 0px 0px 10px 10px'
+    attributes:
+      label: 电费
+      icon: mdi:flash
+      stacked: true
+  - card:
+      type: custom:vertical-stack-in-card
+      cards:
+        - type: entities
+          entities:
+            - entity: sensor.m604xxxxxx_1_balance
+            - entity: sensor.m604xxxxxx_1_current_level
+            - entity: sensor.m604xxxxxx_1_year_consume
+          title: 自来水
+        - type: custom:flex-table-card
+          title: 过去6个月用水情况
+          entities:
+            include: sensor.m604xxxxxx_1_history_*
+          columns:
+            - name: 月份
+              data: name
+            - name: 用水量
+              data: state
+            - name: 水费
+              data: money
+          css:
+            table+: 'padding-top: 15px;'
+            tbody tr:nth-child(even): 'background-color: #a2542f6;'
+            td.left: 'padding: 10px 10px 10px 10px'
+            th.left: 'padding: 0px 0px 10px 10px'
+    attributes:
+      label: 水费
+      icon: mdi:water
+      stacked: true
+  - card:
+      type: custom:vertical-stack-in-card
+      cards:
+        - type: entities
+          title: 中水
+          entities:
+            - entity: sensor.m603xxxxxx_1_balance
+            - entity: sensor.m603xxxxxx_1_current_level
+            - entity: sensor.m603xxxxxx_1_year_consume
+        - type: custom:flex-table-card
+          title: 过去6个月用水情况
+          entities:
+            include: sensor.m603xxxxxx_1_history_*
+          columns:
+            - name: 月份
+              data: name
+            - name: 用水量
+              data: state
+            - name: 水费
+              data: money
+          css:
+            table+: 'padding-top: 15px;'
+            tbody tr:nth-child(even): 'background-color: #a2542f6;'
+            td.left: 'padding: 10px 10px 10px 10px'
+            th.left: 'padding: 0px 0px 10px 10px'
+    attributes:
+      label: 中水
+      icon: mdi:water-sync
+      stacked: true
+  - card:
+      type: custom:vertical-stack-in-card
+      cards:
+        - type: entities
+          entities:
+            - entity: sensor.m6031xxxxx_2_balance
+            - entity: sensor.m6031xxxxx_2_current_level
+            - entity: sensor.m6031xxxxx_2_year_consume
+          title: 天然气
+        - type: custom:flex-table-card
+          title: 过去6个月用气情况
+          entities:
+            include: sensor.m6031xxxxx_2_history_*
+          columns:
+            - name: 月份
+              data: name
+            - name: 用气量
+              data: state
+            - name: 费用
+              data: money
+          css:
+            table+: 'padding-top: 15px;'
+            tbody tr:nth-child(even): 'background-color: #a2542f6;'
+            td.left: 'padding: 10px 10px 10px 10px'
+            th.left: 'padding: 0px 0px 10px 10px'
+    attributes:
+      stacked: true
+      icon: mdi:gas-burner
+      label: 燃气
