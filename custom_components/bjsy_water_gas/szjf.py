@@ -6,6 +6,7 @@ import async_timeout
 from bs4 import BeautifulSoup
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.components.persistent_notification import async_create as pn_create
 
 from .const import LOGGER
 
@@ -22,6 +23,8 @@ BILLINFO_URL = f'{BASE_URL}customerChargeBillChart.action'
 每次查一个表的半年用量
 """
 
+MAX_RETRIES = 3
+
 
 class SZJFCorrdinator:
     def __init__(self, hass, cu_openid, customer_code):
@@ -30,19 +33,33 @@ class SZJFCorrdinator:
         self._szjf = SZJFData(session, cu_openid, customer_code)
 
     async def async_update_data(self):
-        try:
-            async with async_timeout.timeout(60):
-                data = await self._szjf.async_get_data()
-                if not data:
-                    raise UpdateFailed("Failed to data update")
-                return data
-        except asyncio.TimeoutError as ex:
-            raise UpdateFailed("Data update timed out") from ex
-        except Exception as ex:
-            LOGGER.error(
-                "Failed to data update with unknown reason: %(ex)s", {"ex": str(ex)}
-            )
-            raise UpdateFailed("Failed to data update with unknown reason") from ex
+        for attempt in range(MAX_RETRIES):
+            try:
+                async with async_timeout.timeout(60):
+                    data = await self._szjf.async_get_data()
+                    if not data:
+                        raise UpdateFailed("Failed to data update")
+                    return data
+            except asyncio.TimeoutError as ex:
+                LOGGER.error("Data update timed out on attempt %s", attempt + 1)
+                if attempt == MAX_RETRIES - 1:
+                    pn_create(
+                        self._hass,
+                        f"Data update timed out: {ex}",
+                        title="北京顺义自来水天然气信息查询 Notification"
+                    )
+                    raise UpdateFailed("Data update timed out") from ex
+                await asyncio.sleep(1)
+            except Exception as ex:
+                LOGGER.error(
+                    "Failed to data update with unknown reason: %(ex)s", {"ex": str(ex)}
+                )
+                pn_create(
+                    self._hass,
+                    f"Update failed: {ex}",
+                    title="北京顺义自来水天然气信息查询 Notification"
+                )
+                raise UpdateFailed("Failed to data update with unknown reason") from ex
 
 
 class AuthFailed(Exception):
@@ -88,7 +105,7 @@ class SZJFData:
             "cuOpenId": self._cu_openid,
             "state": "00000001",
             "status": "",
-        },ssl=False)
+        }, ssl=False)
         if r.status == 200:
             html_text = await r.read()
             html_text = str(html_text, 'utf8')
@@ -112,11 +129,11 @@ class SZJFData:
             "customerCode": self._customer_code,
             "cuOpenId": self._cu_openid,
             "state": "00000001",
-        },ssl=False)
+        }, ssl=False)
         if r.status == 200:
 
             html_text = await r.read()
-            html_text = str(html_text,'utf8')
+            html_text = str(html_text, 'utf8')
             if self._customer_code in html_text:
                 ret = True
                 try:
@@ -153,7 +170,7 @@ class SZJFData:
                 for n in range(len(monthly)):
                     d = monthly[n]
                     self._info[meterCode]["history"][n] = d
-                    self._info[meterCode]["history"][n]["name"] =d["month"][0] + d["month"][1]
+                    self._info[meterCode]["history"][n]["name"] = d["month"][0] + d["month"][1]
 
             else:
                 ret = False
@@ -228,4 +245,3 @@ class SZJFData:
             await self.async_get_monthly_bill(meterCode, self._info[meterCode]["meterUseType"])
         LOGGER.debug(f"Data {self._info}")
         return self._info
-
