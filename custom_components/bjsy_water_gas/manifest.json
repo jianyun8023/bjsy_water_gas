@@ -1,7 +1,7 @@
 {
   "domain": "bjsy_water_gas",
   "name": "北京顺义自来水天然气信息查询",
-  "version": "v0.0.1",
+  "version": "v0.0.2",
   "documentation": "https://github.com/jianyun8023/bjsy_water_gas",
   "issue_tracker": "https://github.com/jianyun8023/bjsy_water_gas/issues",
   "iot_class": "cloud_polling",
